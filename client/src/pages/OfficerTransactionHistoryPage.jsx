@@ -64,7 +64,7 @@ const OfficerTransactionHistoryPage = () => {
                   <td>{row.processed_at ? new Date(row.processed_at).toLocaleString() : "-"}</td>
                   <td>
                     <Link className="btn btn-dark" to={`/officer/receipt/${row.payment_id}`}>
-                      View
+                      View Receipt
                     </Link>
                   </td>
                 </tr>
@@ -72,7 +72,7 @@ const OfficerTransactionHistoryPage = () => {
               {rows.length === 0 && (
                 <tr>
                   <td colSpan={8} className="small-text">
-                    No verified/processed records yet.
+                    No review records yet.
                   </td>
                 </tr>
               )}

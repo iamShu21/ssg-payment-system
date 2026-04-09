@@ -7,6 +7,7 @@ import api from "../services/api";
 const adminNav = [
   { to: "/moderator/dashboard", label: "Dashboard" },
   { to: "/moderator/students", label: "Students" },
+  { to: "/moderator/officers", label: "Officers" },
   { to: "/moderator/fees", label: "Fees" },
   { to: "/moderator/assignments", label: "Assignments" },
   { to: "/moderator/reports", label: "Reports" },
@@ -87,21 +88,35 @@ const ModeratorFeeFormPage = () => {
         ) : (
           <form className="form-grid" onSubmit={handleSubmit}>
             <label>Fee Name</label>
-            <input value={form.fee_name} onChange={(e) => setValue("fee_name", e.target.value)} required />
+            <input
+              placeholder="Enter fee name"
+              value={form.fee_name}
+              onChange={(e) => setValue("fee_name", e.target.value)}
+              required
+            />
 
             <label>Description</label>
-            <input value={form.description} onChange={(e) => setValue("description", e.target.value)} />
+            <input
+              placeholder="Enter description"
+              value={form.description}
+              onChange={(e) => setValue("description", e.target.value)}
+            />
 
             <label>Amount</label>
             <input
               type="number"
+              placeholder="Enter amount"
               value={form.amount}
               onChange={(e) => setValue("amount", e.target.value)}
               required
             />
 
             <label>Due Date</label>
-            <input type="date" value={form.due_date} onChange={(e) => setValue("due_date", e.target.value)} />
+            <input
+              type="date"
+              value={form.due_date}
+              onChange={(e) => setValue("due_date", e.target.value)}
+            />
 
             <label>Status</label>
             <select value={form.status} onChange={(e) => setValue("status", e.target.value)}>

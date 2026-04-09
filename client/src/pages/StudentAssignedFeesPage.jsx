@@ -4,6 +4,7 @@ import PortalLayout from "../components/PortalLayout";
 import { useAuth } from "../context/AuthContext";
 import api from "../services/api";
 import { downloadReceiptPdf } from "../utils/receiptPdf";
+import { studentReceiptAllowed } from "../utils/paymentReview";
 
 const studentNav = [
   { to: "/student/dashboard", label: "Dashboard" },
@@ -13,6 +14,11 @@ const studentNav = [
 
 const StudentAssignedFeesPage = () => {
   const { student } = useAuth();
+
+  const enrollmentOk =
+    String(student?.enrollment_status ?? "")
+      .trim()
+      .toLowerCase() === "enrolled";
   const [fees, setFees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -37,6 +43,10 @@ const StudentAssignedFeesPage = () => {
   }, [student]);
 
   const handlePayNow = async (studentFeeId) => {
+    if (!enrollmentOk) {
+      alert("Student is not enrolled");
+      return;
+    }
     try {
       setProcessingId(studentFeeId);
       const response = await api.post("/payments/checkout", {
@@ -51,7 +61,8 @@ const StudentAssignedFeesPage = () => {
 
       window.location.href = checkoutUrl;
     } catch (err) {
-      alert(err.response?.data?.message || "Failed to create checkout session.");
+      const msg = err.response?.data?.message || "Failed to create checkout session.";
+      alert(msg);
     } finally {
       setProcessingId(null);
     }
@@ -60,7 +71,9 @@ const StudentAssignedFeesPage = () => {
   const handleDownloadReceipt = async (paymentId) => {
     try {
       setDownloadingPaymentId(paymentId);
-      const response = await api.get(`/payments/${paymentId}/receipt`);
+      const response = await api.get(
+        `/payments/${paymentId}/receipt?audience=student`
+      );
       downloadReceiptPdf(response.data);
     } catch (err) {
       alert(err.response?.data?.message || "Failed to download receipt.");
@@ -79,6 +92,13 @@ const StudentAssignedFeesPage = () => {
         {loading && <p className="page-message">Loading assigned fees...</p>}
         {error && <p className="error">{error}</p>}
 
+        {!enrollmentOk && !loading && (
+          <p className="error error-box" role="status">
+            Student is not enrolled. Online payments are disabled until your enrollment is set to
+            enrolled.
+          </p>
+        )}
+
         {!loading && !error && (
           <table>
             <thead>
@@ -92,7 +112,8 @@ const StudentAssignedFeesPage = () => {
             </thead>
             <tbody>
               {fees.map((fee) => {
-                const canPay = fee.assignment_status !== "paid";
+                const unpaid = fee.assignment_status !== "paid";
+                const isFeeInactive = String(fee.fee_status || "").trim().toLowerCase() !== "active";
                 return (
                   <tr key={fee.student_fee_id}>
                     <td>{fee.fee_name}</td>
@@ -101,37 +122,72 @@ const StudentAssignedFeesPage = () => {
                     <td>
                       <span className={`status status-${fee.assignment_status}`}>
                         {fee.assignment_status}
+                        {isFeeInactive ? " (inactive fee)" : ""}
                       </span>
                     </td>
                     <td>
-                      {canPay ? (
+                      {unpaid ? (
                         <button
                           className="btn"
+                          type="button"
                           onClick={() => handlePayNow(fee.student_fee_id)}
-                          disabled={processingId === fee.student_fee_id}
+                          disabled={
+                            !enrollmentOk ||
+                            processingId === fee.student_fee_id ||
+                            isFeeInactive
+                          }
+                          title={!enrollmentOk
+                            ? "Student is not enrolled"
+                            : isFeeInactive
+                            ? "This fee is inactive and cannot be paid."
+                            : undefined}
                         >
-                          {processingId === fee.student_fee_id ? "Processing..." : "Pay Now"}
+                          {isFeeInactive
+                            ? "Inactive"
+                            : processingId === fee.student_fee_id
+                            ? "Processing..."
+                            : "Pay Now"}
                         </button>
                       ) : (
                         <div className="button-col">
-                          {fee.payment_id ? (
+                          {fee.payment_id &&
+                          studentReceiptAllowed(
+                            fee.latest_payment_status,
+                            fee.latest_officer_status
+                          ) ? (
                             <>
-                              <Link className="btn btn-secondary" to={`/student/receipt/${fee.payment_id}`}>
+                              <Link
+                                className="btn btn-secondary"
+                                to={`/student/receipt/${fee.payment_id}`}
+                              >
                                 View Receipt
                               </Link>
                               <button
                                 className="btn"
                                 type="button"
-                                onClick={() => handleDownloadReceipt(fee.payment_id)}
-                                disabled={downloadingPaymentId === fee.payment_id}
+                                onClick={() =>
+                                  handleDownloadReceipt(fee.payment_id)
+                                }
+                                disabled={
+                                  downloadingPaymentId === fee.payment_id
+                                }
                               >
                                 {downloadingPaymentId === fee.payment_id
                                   ? "Downloading..."
                                   : "Download PDF"}
                               </button>
                             </>
+                          ) : fee.payment_id ? (
+                            <span className="small-text">
+                              {String(fee.latest_payment_status || "")
+                                .toLowerCase() === "rejected"
+                                ? "Payment rejected — see Payment History"
+                                : "Paid — receipt available after officer approval"}
+                            </span>
                           ) : (
-                            <span className="small-text">Paid (view in Payment History)</span>
+                            <span className="small-text">
+                              Paid (view in Payment History)
+                            </span>
                           )}
                         </div>
                       )}

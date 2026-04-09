@@ -26,6 +26,13 @@ const login = async (req, res) => {
       return res.status(400).json({ message: "Invalid password" });
     }
 
+    const accountStatus = String(user.status ?? "")
+      .trim()
+      .toLowerCase();
+    if (accountStatus !== "active") {
+      return res.status(403).json({ message: "Account is inactive" });
+    }
+
     const token = jwt.sign(
       {
         user_id: user.user_id,
@@ -42,6 +49,7 @@ const login = async (req, res) => {
         user_id: user.user_id,
         username: user.username,
         role: user.role,
+        status: user.status,
       },
     });
 

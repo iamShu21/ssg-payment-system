@@ -3,10 +3,16 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import PortalLayout from "../components/PortalLayout";
 import { useAuth } from "../context/AuthContext";
 import api from "../services/api";
+import {
+  ALLOWED_COURSES,
+  isValidEmail,
+  getEmailErrorMessage,
+} from "../utils/formValidation";
 
 const adminNav = [
   { to: "/moderator/dashboard", label: "Dashboard" },
   { to: "/moderator/students", label: "Students" },
+  { to: "/moderator/officers", label: "Officers" },
   { to: "/moderator/fees", label: "Fees" },
   { to: "/moderator/assignments", label: "Assignments" },
   { to: "/moderator/reports", label: "Reports" },
@@ -52,7 +58,7 @@ const ModeratorStudentFormPage = () => {
           middle_name: row.middle_name || "",
           last_name: row.last_name || "",
           course: row.course || "",
-          year_level: row.year_level || "",
+          year_level: row.year_level ? String(row.year_level) : "",
           section: row.section || "",
           email: row.email || "",
           enrollment_status: row.enrollment_status || "enrolled",
@@ -73,17 +79,23 @@ const ModeratorStudentFormPage = () => {
     e.preventDefault();
     setSaving(true);
     setError("");
+
+    if (form.email && !isValidEmail(form.email)) {
+      setError(getEmailErrorMessage(form.email));
+      setSaving(false);
+      return;
+    }
+
     try {
+      const submissionData = {
+        ...form,
+        year_level: Number(form.year_level),
+        performed_by: user?.user_id || null,
+      };
       if (isEdit) {
-        await api.put(`/students/${student_id}`, {
-          ...form,
-          performed_by: user?.user_id || null,
-        });
+        await api.put(`/students/${student_id}`, submissionData);
       } else {
-        await api.post("/students", {
-          ...form,
-          performed_by: user?.user_id || null,
-        });
+        await api.post("/students", submissionData);
       }
       navigate("/moderator/students");
     } catch (err) {
@@ -101,13 +113,20 @@ const ModeratorStudentFormPage = () => {
         ) : (
           <form className="form-grid" onSubmit={handleSubmit}>
             <label>Username</label>
-            <input value={form.username} onChange={(e) => setValue("username", e.target.value)} required />
+            <input
+              placeholder="Enter username"
+              value={form.username}
+              onChange={(e) => setValue("username", e.target.value)}
+              required
+              disabled={isEdit}
+            />
 
             {!isEdit && (
               <>
                 <label>Password</label>
                 <input
                   type="password"
+                  placeholder="Enter password"
                   value={form.password}
                   onChange={(e) => setValue("password", e.target.value)}
                   required
@@ -115,47 +134,95 @@ const ModeratorStudentFormPage = () => {
               </>
             )}
 
-            <label>Student Number</label>
+            <label>Student ID Number</label>
             <input
+              placeholder="Enter student number"
               value={form.student_number}
               onChange={(e) => setValue("student_number", e.target.value)}
               required
             />
 
             <label>First Name</label>
-            <input value={form.first_name} onChange={(e) => setValue("first_name", e.target.value)} required />
+            <input
+              placeholder="Enter first name"
+              value={form.first_name}
+              onChange={(e) => setValue("first_name", e.target.value)}
+              required
+            />
 
             <label>Middle Name</label>
-            <input value={form.middle_name} onChange={(e) => setValue("middle_name", e.target.value)} />
+            <input
+              placeholder="Enter middle name"
+              value={form.middle_name}
+              onChange={(e) => setValue("middle_name", e.target.value)}
+            />
 
             <label>Last Name</label>
-            <input value={form.last_name} onChange={(e) => setValue("last_name", e.target.value)} required />
+            <input
+              placeholder="Enter last name"
+              value={form.last_name}
+              onChange={(e) => setValue("last_name", e.target.value)}
+              required
+            />
 
             <label>Course</label>
-            <input value={form.course} onChange={(e) => setValue("course", e.target.value)} required />
+            <select
+              value={form.course}
+              onChange={(e) => setValue("course", e.target.value)}
+              required
+            >
+              <option value="" disabled>Select course</option>
+              {ALLOWED_COURSES.map((course) => (
+                <option key={course} value={course}>{course}</option>
+              ))}
+            </select>
 
             <label>Year Level</label>
-            <input value={form.year_level} onChange={(e) => setValue("year_level", e.target.value)} required />
+            <select
+              value={form.year_level}
+              onChange={(e) => setValue("year_level", e.target.value)}
+              required
+            >
+              <option value="" disabled>Select year level</option>
+              <option value="1">1st Year</option>
+              <option value="2">2nd Year</option>
+              <option value="3">3rd Year</option>
+              <option value="4">4th Year</option>
+              <option value="5">5th Year</option>
+            </select>
 
             <label>Section</label>
-            <input value={form.section} onChange={(e) => setValue("section", e.target.value)} />
+            <input
+              placeholder="Enter section"
+              value={form.section}
+              onChange={(e) => setValue("section", e.target.value)}
+            />
 
-            <label>Email</label>
-            <input type="email" value={form.email} onChange={(e) => setValue("email", e.target.value)} />
+            <label>Email Address</label>
+            <input
+              type="email"
+              placeholder="Enter email address"
+              value={form.email}
+              onChange={(e) => setValue("email", e.target.value)}
+            />
 
             <label>Enrollment Status</label>
             <select
               value={form.enrollment_status}
               onChange={(e) => setValue("enrollment_status", e.target.value)}
             >
-              <option value="enrolled">enrolled</option>
-              <option value="inactive">inactive</option>
+              <option value="enrolled">Enrolled</option>
+              <option value="inactive">Inactive</option>
             </select>
 
             <label>User Status</label>
-            <select value={form.user_status} onChange={(e) => setValue("user_status", e.target.value)}>
-              <option value="active">active</option>
-              <option value="inactive">inactive</option>
+            <select
+              value={form.user_status}
+              onChange={(e) => setValue("user_status", e.target.value)}
+              required
+            >
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
             </select>
 
             {error && <p className="error">{error}</p>}

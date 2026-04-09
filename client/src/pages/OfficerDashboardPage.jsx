@@ -35,10 +35,10 @@ const OfficerDashboardPage = () => {
   const summaryChartData = useMemo(() => {
     if (!summary) return [];
     return [
-      { label: "Paid", value: summary.total_paid_transactions || 0, color: "#48a111" },
+      { label: "Paid (gateway)", value: summary.total_paid_transactions || 0, color: "#48a111" },
       { label: "Unreviewed", value: summary.unreviewed_payments || 0, color: "#f2b50b" },
-      { label: "Verified", value: summary.verified_payments || 0, color: "#2f5fa8" },
-      { label: "Processed", value: summary.processed_payments || 0, color: "#25671e" },
+      { label: "Approved", value: summary.approved_payments || 0, color: "#2f5fa8" },
+      { label: "Rejected", value: summary.rejected_payments || 0, color: "#c0392b" },
     ];
   }, [summary]);
 
@@ -71,7 +71,7 @@ const OfficerDashboardPage = () => {
   }, [recentRows]);
 
   return (
-    <PortalLayout title="Officer Dashboard" navItems={officerNav}>
+    <PortalLayout title="Dashboard" navItems={officerNav}>
       {loading && <p className="page-message">Loading dashboard...</p>}
       {error && <p className="error">{error}</p>}
 
@@ -87,12 +87,12 @@ const OfficerDashboardPage = () => {
               <p>{summary.unreviewed_payments || 0}</p>
             </div>
             <div className="summary-card">
-              <h4>Verified Payments</h4>
-              <p>{summary.verified_payments || 0}</p>
+              <h4>Approved (officer)</h4>
+              <p>{summary.approved_payments || 0}</p>
             </div>
             <div className="summary-card">
-              <h4>Processed Payments</h4>
-              <p>{summary.processed_payments || 0}</p>
+              <h4>Rejected</h4>
+              <p>{summary.rejected_payments || 0}</p>
             </div>
           </div>
 
@@ -110,7 +110,7 @@ const OfficerDashboardPage = () => {
 
           <div className="charts-grid">
             <SimpleBarChart
-              title="Paid vs Unreviewed vs Verified vs Processed"
+              title="Paid vs Unreviewed vs Approved vs Rejected"
               data={summaryChartData}
             />
             <SimpleBarChart

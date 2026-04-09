@@ -22,7 +22,9 @@ const StudentReceiptPage = () => {
   useEffect(() => {
     const run = async () => {
       try {
-        const response = await api.get(`/payments/${payment_id}/receipt`);
+        const response = await api.get(
+          `/payments/${payment_id}/receipt?audience=student`
+        );
         setReceipt(response.data);
       } catch (err) {
         setError(err.response?.data?.message || "Failed to load receipt.");

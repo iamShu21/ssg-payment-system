@@ -1,6 +1,66 @@
 const pool = require("../db");
 const axios = require("axios");
 
+/**
+ * Single mapping for officer review PATCH body.
+ * Canonical actions: "approved" | "rejected" (what we persist on payments + payment_processing).
+ * Accepts legacy labels and UI verbs so validation never conflicts with Approve/Reject buttons.
+ */
+const OFFICER_REVIEW_APPROVE = "approved";
+const OFFICER_REVIEW_REJECT = "rejected";
+
+const resolveOfficerReviewInput = (raw) => {
+  const s = String(raw ?? "")
+    .trim()
+    .toLowerCase();
+  if (!s) return null;
+  if (["approved", "approve", "verified", "processed"].includes(s)) {
+    return OFFICER_REVIEW_APPROVE;
+  }
+  if (["rejected", "reject"].includes(s)) {
+    return OFFICER_REVIEW_REJECT;
+  }
+  return null;
+};
+
+const pickOfficerStatusFromBody = (body) =>
+  body?.officer_status ??
+  body?.officerStatus ??
+  body?.action ??
+  body?.decision;
+
+const isFinalOfficerStatus = (raw) => {
+  const s = String(raw || "").trim().toLowerCase();
+  return ["approved", "rejected", "verified", "processed"].includes(s);
+};
+
+/**
+ * Receipt eligibility: financial success is payment_status = 'paid' only (never 'approved' — that is officer_status).
+ * officer_status gates institutional approval (approved | verified | processed).
+ */
+const studentReceiptAllowed = (paymentStatus, officerStatus) => {
+  const ps = String(paymentStatus || "").trim().toLowerCase();
+  if (ps !== "paid") return false;
+  const o = String(officerStatus || "").trim().toLowerCase();
+  if (o === "rejected") return false;
+  return ["approved", "verified", "processed"].includes(o);
+};
+
+/**
+ * Generate sequential receipt number for the current year.
+ * Format: SSG-<YEAR>-<4 digit sequence>
+ * Counts existing non-null receipt_numbers for the year.
+ */
+const generateReceiptNumber = async (conn) => {
+  const year = new Date().getFullYear();
+  const [rows] = await conn.query(
+    `SELECT COUNT(*) AS count FROM payments WHERE YEAR(receipt_issued_at) = ? AND receipt_number IS NOT NULL`,
+    [year]
+  );
+  const nextNumber = (rows[0].count || 0) + 1;
+  return `SSG-${year}-${String(nextNumber).padStart(4, "0")}`;
+};
+
 const createCheckoutSession = async (req, res) => {
   try {
     console.log("[DEBUG] createCheckoutSession called");
@@ -22,12 +82,16 @@ const createCheckoutSession = async (req, res) => {
         s.first_name,
         s.last_name,
         s.email,
+        s.enrollment_status,
+        u.status AS user_account_status,
         f.fee_id,
         f.fee_name,
         f.description,
-        f.amount
+        f.amount,
+        f.status AS fee_status
       FROM student_fees sf
       JOIN students s ON sf.student_id = s.student_id
+      JOIN users u ON s.user_id = u.user_id
       JOIN fees f ON sf.fee_id = f.fee_id
       WHERE sf.student_fee_id = ?
       `,
@@ -40,6 +104,26 @@ const createCheckoutSession = async (req, res) => {
 
     const studentFee = rows[0];
     const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+
+    const payerStatus = String(studentFee.user_account_status ?? "")
+      .trim()
+      .toLowerCase();
+    if (payerStatus !== "active") {
+      return res.status(403).json({ message: "Account is inactive" });
+    }
+
+    const enrollment = String(studentFee.enrollment_status ?? "")
+      .trim()
+      .toLowerCase();
+    if (enrollment !== "enrolled") {
+      return res.status(403).json({ message: "Student is not enrolled" });
+    }
+
+    if (String(studentFee.fee_status || "").trim().toLowerCase() !== "active") {
+      return res
+        .status(400)
+        .json({ message: "This fee is inactive and cannot be paid." });
+    }
 
     if (studentFee.assignment_status === "paid") {
       return res.status(400).json({ message: "This fee is already paid" });
@@ -161,11 +245,22 @@ const handleWebhook = async (req, res) => {
       resourceAttributes.checkout_session_id ||
       resourceAttributes.checkout_id ||
       null;
+
+    // Extract actual payment ID and payment method from the first payment in the webhook
+    const firstPayment = resourceAttributes.payments?.[0];
+    const paymentId = firstPayment?.id;
+    const paymentMethod =
+    firstPayment?.attributes?.source?.type ||   // ✅ GCash, card, etc.
+    firstPayment?.attributes?.payment_method || // fallback
+    'unknown';
+
     const studentFeeIdRaw = metadata.student_fee_id;
     const studentFeeId = studentFeeIdRaw ? Number(studentFeeIdRaw) : null;
 
     console.log("eventType:", eventType);
     console.log("checkoutId:", checkoutId);
+    console.log("paymentId:", paymentId);
+    console.log("paymentMethod:", paymentMethod);
     console.log("checkoutMetadata:", checkoutMetadata);
     console.log("paymentMetadata:", paymentMetadata);
     console.log("paymentIntentMetadata:", paymentIntentMetadata);
@@ -212,9 +307,10 @@ const handleWebhook = async (req, res) => {
       `UPDATE payments
        SET payment_status = 'paid',
            paymongo_reference = ?,
+           payment_method = ?,
            paid_at = NOW()
        WHERE payment_id = ?`,
-      [checkoutId, matchedPayment.payment_id]
+      [paymentId || checkoutId, paymentMethod, matchedPayment.payment_id]
     );
 
     console.log("payments UPDATE affectedRows:", paymentUpdateResult.affectedRows);
@@ -253,7 +349,7 @@ const handleWebhook = async (req, res) => {
       if (paymentInfoRows.length > 0) {
         const info = paymentInfoRows[0];
         const amountText = `PHP ${Number(info.amount || 0).toLocaleString()}`;
-        const reference = info.paymongo_reference || checkoutId;
+        const reference = paymentId || info.paymongo_reference || checkoutId;
 
         if (info.student_user_id) {
           await pool.query(
@@ -321,6 +417,7 @@ const getPaymentHistoryByStudentId = async (req, res) => {
       SELECT
         p.payment_id,
         p.payment_status,
+        p.officer_status,
         p.amount,
         p.paid_at,
         p.created_at,
@@ -330,10 +427,26 @@ const getPaymentHistoryByStudentId = async (req, res) => {
         f.fee_name,
         f.description,
         f.due_date,
-        sf.assignment_status
+        sf.assignment_status,
+        pp_latest.remarks AS review_remarks,
+        pp_latest.processed_at AS reviewed_at,
+        pp_latest.processed_by AS reviewed_by
       FROM payments p
       JOIN student_fees sf ON p.student_fee_id = sf.student_fee_id
       JOIN fees f ON sf.fee_id = f.fee_id
+      LEFT JOIN (
+        SELECT
+          pp1.payment_id,
+          pp1.remarks,
+          pp1.processed_at,
+          pp1.processed_by
+        FROM payment_processing pp1
+        INNER JOIN (
+          SELECT payment_id, MAX(processing_id) AS mid
+          FROM payment_processing
+          GROUP BY payment_id
+        ) t ON pp1.processing_id = t.mid
+      ) pp_latest ON p.payment_id = pp_latest.payment_id
       WHERE sf.student_id = ?
       ORDER BY p.payment_id DESC
       `,
@@ -354,6 +467,8 @@ const getOfficerPaymentSummary = async (req, res) => {
       SELECT
         SUM(CASE WHEN payment_status = 'paid' THEN 1 ELSE 0 END) AS total_paid_transactions,
         SUM(CASE WHEN payment_status = 'paid' AND (officer_status IS NULL OR officer_status = '' OR officer_status = 'unreviewed') THEN 1 ELSE 0 END) AS unreviewed_payments,
+        SUM(CASE WHEN officer_status IN ('approved', 'verified', 'processed') THEN 1 ELSE 0 END) AS approved_payments,
+        SUM(CASE WHEN officer_status = 'rejected' THEN 1 ELSE 0 END) AS rejected_payments,
         SUM(CASE WHEN officer_status = 'verified' THEN 1 ELSE 0 END) AS verified_payments,
         SUM(CASE WHEN officer_status = 'processed' THEN 1 ELSE 0 END) AS processed_payments
       FROM payments
@@ -457,65 +572,155 @@ const getOfficerPayments = async (req, res) => {
 };
 
 const updateOfficerPaymentStatus = async (req, res) => {
+  const { payment_id } = req.params;
+  const { remarks, processed_by } = req.body;
+
+  const rawStatus = pickOfficerStatusFromBody(req.body);
+  if (rawStatus === undefined || rawStatus === null || String(rawStatus).trim() === "") {
+    return res.status(400).json({ message: "officer_status is required" });
+  }
+
+  const target = resolveOfficerReviewInput(rawStatus);
+  if (!target) {
+    return res.status(400).json({
+      message:
+        "Invalid officer_status. Use an approval value (approved, approve, verified, processed) or a rejection value (rejected, reject).",
+    });
+  }
+
+  if (target === OFFICER_REVIEW_REJECT) {
+    const reason = String(remarks || "").trim();
+    if (!reason) {
+      return res.status(400).json({
+        message: "A rejection reason is required before submitting.",
+      });
+    }
+  }
+
+  const conn = await pool.getConnection();
   try {
-    const { payment_id } = req.params;
-    const { officer_status, remarks, processed_by } = req.body;
+    await conn.beginTransaction();
 
-    if (!officer_status) {
-      return res.status(400).json({ message: "officer_status is required" });
-    }
-
-    if (!["verified", "processed"].includes(officer_status)) {
-      return res
-        .status(400)
-        .json({ message: "officer_status must be 'verified' or 'processed'" });
-    }
-
-    const [paymentRows] = await pool.query(
-      `SELECT payment_id, payment_status FROM payments WHERE payment_id = ?`,
+    const [paymentRows] = await conn.query(
+      `SELECT payment_id, payment_status, officer_status, student_fee_id
+       FROM payments WHERE payment_id = ?`,
       [payment_id]
     );
 
     if (paymentRows.length === 0) {
+      await conn.rollback();
       return res.status(404).json({ message: "Payment not found" });
     }
 
-    if (paymentRows[0].payment_status !== "paid") {
+    const pay = paymentRows[0];
+    const currentPs = String(pay.payment_status || "").toLowerCase();
+
+    if (currentPs === "rejected") {
+      await conn.rollback();
       return res
         .status(400)
-        .json({ message: "Only paid payments can be verified/processed" });
+        .json({ message: "This payment has already been reviewed." });
     }
 
-    const [updateResult] = await pool.query(
-      `
-      UPDATE payments
-      SET officer_status = ?
-      WHERE payment_id = ?
-      `,
-      [officer_status, payment_id]
-    );
+    if (isFinalOfficerStatus(pay.officer_status)) {
+      await conn.rollback();
+      return res
+        .status(400)
+        .json({ message: "This payment has already been reviewed." });
+    }
 
-    await pool.query(
-      `
-      INSERT INTO payment_processing (payment_id, processed_by, processing_status, remarks, processed_at)
-      VALUES (?, ?, ?, ?, NOW())
-      `,
-      [payment_id, processed_by || null, officer_status, remarks || null]
-    );
+    if (target === OFFICER_REVIEW_APPROVE) {
+      /* Schema: payment_status ENUM(pending,paid,failed,expired,rejected); officer_status ENUM includes approved. */
+      if (currentPs === "pending") {
+        await conn.query(
+          `UPDATE payments
+           SET payment_status = 'paid',
+               officer_status = 'approved',
+               paid_at = COALESCE(paid_at, NOW())
+           WHERE payment_id = ?`,
+          [payment_id]
+        );
+        await conn.query(
+          `UPDATE student_fees SET assignment_status = 'paid' WHERE student_fee_id = ?`,
+          [pay.student_fee_id]
+        );
+      } else if (currentPs === "paid") {
+        await conn.query(
+          `UPDATE payments SET officer_status = 'approved' WHERE payment_id = ?`,
+          [payment_id]
+        );
+      } else {
+        await conn.rollback();
+        return res.status(400).json({
+          message: "Only pending or paid payments can be approved.",
+        });
+      }
 
+      const remarkText =
+        remarks !== undefined && remarks !== null
+          ? String(remarks).trim() || null
+          : null;
+      await conn.query(
+        `INSERT INTO payment_processing (payment_id, processed_by, processing_status, remarks, processed_at)
+         VALUES (?, ?, 'approved', ?, NOW())`,
+        [payment_id, processed_by || null, remarkText]
+      );
+
+      // Generate receipt number if not exists and eligible
+      const [receiptCheck] = await conn.query(
+        `SELECT receipt_number FROM payments WHERE payment_id = ?`,
+        [payment_id]
+      );
+      if (!receiptCheck[0].receipt_number) {
+        const receiptNumber = await generateReceiptNumber(conn);
+        await conn.query(
+          `UPDATE payments SET receipt_number = ?, receipt_issued_at = NOW(), receipt_issued_by = ? WHERE payment_id = ?`,
+          [receiptNumber, processed_by, payment_id]
+        );
+      }
+    } else {
+      /* Reject: payment_status must be 'rejected' (add ENUM value via migrations/001_add_payment_status_rejected.sql). */
+      const reason = String(remarks || "").trim();
+      await conn.query(
+        `UPDATE payments
+         SET payment_status = 'rejected',
+             officer_status = 'rejected'
+         WHERE payment_id = ?`,
+        [payment_id]
+      );
+      await conn.query(
+        `UPDATE student_fees SET assignment_status = 'unpaid' WHERE student_fee_id = ?`,
+        [pay.student_fee_id]
+      );
+      await conn.query(
+        `INSERT INTO payment_processing (payment_id, processed_by, processing_status, remarks, processed_at)
+         VALUES (?, ?, 'rejected', ?, NOW())`,
+        [payment_id, processed_by || null, reason]
+      );
+    }
+
+    await conn.commit();
     res.json({
       message: "Officer payment status updated",
-      affectedRows: updateResult.affectedRows,
+      affectedRows: 1,
     });
   } catch (error) {
+    try {
+      await conn.rollback();
+    } catch (_) {
+      /* ignore */
+    }
     console.error("Update officer payment status error:", error);
     res.status(500).json({ message: "Server error" });
+  } finally {
+    conn.release();
   }
 };
 
 const getReceiptByPaymentId = async (req, res) => {
   try {
     const { payment_id } = req.params;
+    const audience = String(req.query.audience || "").trim().toLowerCase();
 
     const [rows] = await pool.query(
       `
@@ -523,19 +728,35 @@ const getReceiptByPaymentId = async (req, res) => {
         p.payment_id,
         p.amount,
         p.payment_status,
+        p.officer_status,
         p.payment_method,
         p.paymongo_reference,
         p.receipt_number,
         p.paid_at,
+        p.receipt_issued_by,
         s.student_number,
         s.first_name,
         s.middle_name,
         s.last_name,
-        f.fee_name
+        f.fee_name,
+        o.first_name AS officer_first_name,
+        o.middle_name AS officer_middle_name,
+        o.last_name AS officer_last_name,
+        o.position AS officer_position,
+        fo.first_name AS fallback_officer_first_name,
+        fo.middle_name AS fallback_officer_middle_name,
+        fo.last_name AS fallback_officer_last_name,
+        fo.position AS fallback_officer_position,
+        pp.processed_by AS fallback_officer_user_id
       FROM payments p
       JOIN student_fees sf ON p.student_fee_id = sf.student_fee_id
       JOIN students s ON sf.student_id = s.student_id
       JOIN fees f ON sf.fee_id = f.fee_id
+      LEFT JOIN users u ON p.receipt_issued_by = u.user_id
+      LEFT JOIN officers o ON u.user_id = o.user_id
+      LEFT JOIN payment_processing pp ON p.payment_id = pp.payment_id AND pp.processing_status = 'approved'
+      LEFT JOIN users fu ON pp.processed_by = fu.user_id
+      LEFT JOIN officers fo ON fu.user_id = fo.user_id
       WHERE p.payment_id = ?
       `,
       [payment_id]
@@ -545,7 +766,42 @@ const getReceiptByPaymentId = async (req, res) => {
       return res.status(404).json({ message: "Payment not found" });
     }
 
-    res.json(rows[0]);
+    const row = rows[0];
+
+    if (audience === "student") {
+      if (!studentReceiptAllowed(row.payment_status, row.officer_status)) {
+        const ps = String(row.payment_status || "").toLowerCase();
+        const os = String(row.officer_status || "").toLowerCase();
+        if (ps === "rejected" || os === "rejected") {
+          return res.status(403).json({
+            message:
+              "Receipt is not available for rejected payments. See Payment History for the reason.",
+          });
+        }
+        return res.status(403).json({
+          message:
+            "Receipt is not available until this payment has been approved by an officer.",
+        });
+      }
+    }
+
+    // Determine approving officer
+    let approvedBy = null;
+    if (row.officer_first_name) {
+      const fullName = [row.officer_first_name, row.officer_middle_name, row.officer_last_name]
+        .filter(Boolean)
+        .join(" ");
+      approvedBy = `${fullName} (${row.officer_position})`;
+    } else if (row.fallback_officer_first_name) {
+      const fullName = [row.fallback_officer_first_name, row.fallback_officer_middle_name, row.fallback_officer_last_name]
+        .filter(Boolean)
+        .join(" ");
+      approvedBy = `${fullName} (${row.fallback_officer_position})`;
+    }
+
+    row.approved_by = approvedBy;
+
+    res.json(row);
   } catch (error) {
     console.error("Get receipt by payment id error:", error);
     res.status(500).json({ message: "Server error" });
@@ -576,7 +832,7 @@ const getOfficerTransactionHistory = async (req, res) => {
       JOIN student_fees sf ON p.student_fee_id = sf.student_fee_id
       JOIN students s ON sf.student_id = s.student_id
       JOIN fees f ON sf.fee_id = f.fee_id
-      WHERE pp.processing_status IN ('verified', 'processed')
+      WHERE pp.processing_status IN ('approved', 'rejected', 'verified', 'processed')
       ORDER BY pp.processing_id DESC
       `
     );

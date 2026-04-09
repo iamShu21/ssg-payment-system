@@ -6,6 +6,7 @@ import api from "../services/api";
 const adminNav = [
   { to: "/moderator/dashboard", label: "Dashboard" },
   { to: "/moderator/students", label: "Students" },
+  { to: "/moderator/officers", label: "Officers" },
   { to: "/moderator/fees", label: "Fees" },
   { to: "/moderator/assignments", label: "Assignments" },
   { to: "/moderator/reports", label: "Reports" },
@@ -68,12 +69,17 @@ const ModeratorAssignmentsPage = () => {
         <div className="toolbar">
           <select value={selectedFeeId} onChange={(e) => setSelectedFeeId(e.target.value)}>
             <option value="">Select Fee</option>
-            {fees.map((fee) => (
-              <option key={fee.fee_id} value={fee.fee_id}>
-                {fee.fee_name} - PHP {Number(fee.amount).toLocaleString()}
-              </option>
-            ))}
+            {fees
+              .filter((fee) => String(fee.status || "").trim().toLowerCase() === "active")
+              .map((fee) => (
+                <option key={fee.fee_id} value={fee.fee_id}>
+                  {fee.fee_name} - PHP {Number(fee.amount).toLocaleString()}
+                </option>
+              ))}
           </select>
+          <span className="small-text" style={{ marginLeft: "1rem" }}>
+            Only active fees are assignable.
+          </span>
           <button className="btn" onClick={handleAssignAll}>
             Assign to All
           </button>

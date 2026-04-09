@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import PortalLayout from "../components/PortalLayout";
 import { useAuth } from "../context/AuthContext";
+import { formatYearLevel } from "../utils/displayFormat";
 import api from "../services/api";
 import { getRoleNav } from "../utils/navigation";
 
@@ -39,7 +40,7 @@ const ProfilePage = () => {
             <div><strong>Name:</strong> {[profile.first_name, profile.middle_name, profile.last_name].filter(Boolean).join(" ") || "-"}</div>
             <div><strong>Email:</strong> {profile.email || "-"}</div>
             <div><strong>Course:</strong> {profile.course || "-"}</div>
-            <div><strong>Year/Section:</strong> {profile.year_level || "-"} {profile.section ? `/ ${profile.section}` : ""}</div>
+            <div><strong>Year/Section:</strong> {formatYearLevel(profile.year_level) || "-"} {profile.section ? `/ ${profile.section}` : ""}</div>
           </div>
         )}
       </div>

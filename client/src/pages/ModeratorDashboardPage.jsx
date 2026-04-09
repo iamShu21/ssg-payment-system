@@ -7,6 +7,7 @@ import SimpleBarChart from "../components/SimpleBarChart";
 const moderatorNav = [
   { to: "/moderator/dashboard", label: "Dashboard" },
   { to: "/moderator/students", label: "Students" },
+  { to: "/moderator/officers", label: "Officers" },
   { to: "/moderator/fees", label: "Fees" },
   { to: "/moderator/assignments", label: "Assignments" },
   { to: "/moderator/reports", label: "Reports" },
@@ -82,7 +83,7 @@ const ModeratorDashboardPage = () => {
   }, [summary]);
 
   return (
-    <PortalLayout title="Moderator Dashboard" navItems={moderatorNav}>
+    <PortalLayout title="Dashboard" navItems={moderatorNav}>
       {loading && <p className="page-message">Loading dashboard...</p>}
       {error && <p className="error">{error}</p>}
 

@@ -17,6 +17,10 @@ const assignFeeToAllStudents = async (req, res) => {
       return res.status(404).json({ message: "Fee not found" });
     }
 
+    if (String(feeRows[0].status || "").trim().toLowerCase() !== "active") {
+      return res.status(400).json({ message: "Inactive fees cannot be assigned." });
+    }
+
     const [students] = await pool.query(`
       SELECT student_id
       FROM students

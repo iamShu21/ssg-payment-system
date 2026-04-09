@@ -24,6 +24,7 @@ export const getRoleNav = (role) => {
   return [
     { to: "/moderator/dashboard", label: "Dashboard" },
     { to: "/moderator/students", label: "Students" },
+    { to: "/moderator/officers", label: "Officers" },
     { to: "/moderator/fees", label: "Fees" },
     { to: "/moderator/assignments", label: "Assignments" },
     { to: "/moderator/reports", label: "Reports" },

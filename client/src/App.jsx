@@ -11,6 +11,8 @@ import ModeratorFeesPage from "./pages/ModeratorFeesPage";
 import ModeratorReportsPage from "./pages/ModeratorReportsPage";
 import ModeratorStudentFormPage from "./pages/ModeratorStudentFormPage";
 import ModeratorStudentsPage from "./pages/ModeratorStudentsPage";
+import ModeratorOfficerFormPage from "./pages/ModeratorOfficerFormPage";
+import ModeratorOfficersPage from "./pages/ModeratorOfficersPage";
 import OfficerDashboardPage from "./pages/OfficerDashboardPage";
 import OfficerPaymentsPage from "./pages/OfficerPaymentsPage";
 import OfficerReceiptPage from "./pages/OfficerReceiptPage";
@@ -166,6 +168,30 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={["admin"]}>
               <ModeratorStudentFormPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/moderator/officers"
+          element={
+            <ProtectedRoute allowedRoles={["admin"]}>
+              <ModeratorOfficersPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/moderator/officers/new"
+          element={
+            <ProtectedRoute allowedRoles={["admin"]}>
+              <ModeratorOfficerFormPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/moderator/officers/:officer_id/edit"
+          element={
+            <ProtectedRoute allowedRoles={["admin"]}>
+              <ModeratorOfficerFormPage />
             </ProtectedRoute>
           }
         />

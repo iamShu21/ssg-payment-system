@@ -48,6 +48,7 @@ const ChangePasswordPage = () => {
           <label>Current Password</label>
           <input
             type="password"
+            placeholder="Enter current password"
             value={currentPassword}
             onChange={(e) => setCurrentPassword(e.target.value)}
             required
@@ -56,6 +57,7 @@ const ChangePasswordPage = () => {
           <label>New Password</label>
           <input
             type="password"
+            placeholder="Enter new password"
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
             required
@@ -64,6 +66,7 @@ const ChangePasswordPage = () => {
           <label>Confirm New Password</label>
           <input
             type="password"
+            placeholder="Re-enter new password"
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
             required

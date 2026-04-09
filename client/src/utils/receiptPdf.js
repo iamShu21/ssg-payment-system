@@ -9,7 +9,7 @@ export const downloadReceiptPdf = (receipt) => {
     .join(" ");
 
   doc.setFontSize(16);
-  doc.text("School Payment Receipt", 14, 18);
+  doc.text("SSG Payment Receipt", 14, 18);
   doc.setFontSize(10);
   doc.text("Supreme Student Government", 14, 24);
 
@@ -19,7 +19,7 @@ export const downloadReceiptPdf = (receipt) => {
   const lines = [
     ["Receipt Number", valueOrDash(receipt?.receipt_number)],
     ["Student Name", valueOrDash(studentName)],
-    ["Student Number", valueOrDash(receipt?.student_number)],
+    ["Student ID Number", valueOrDash(receipt?.student_number)],
     ["Fee Name", valueOrDash(receipt?.fee_name)],
     ["Amount", `PHP ${Number(receipt?.amount || 0).toLocaleString()}`],
     [
@@ -28,7 +28,9 @@ export const downloadReceiptPdf = (receipt) => {
     ],
     ["PayMongo Reference", valueOrDash(receipt?.paymongo_reference)],
     ["Payment Method", valueOrDash(receipt?.payment_method)],
+    ["Approved By", valueOrDash(receipt?.approved_by)],
     ["Payment Status", valueOrDash(receipt?.payment_status)],
+    ["Officer review", valueOrDash(receipt?.officer_status)],
   ];
 
   let y = 38;

@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import PortalLayout from "../components/PortalLayout";
 import SimpleBarChart from "../components/SimpleBarChart";
 import StatusBadge from "../components/StatusBadge";
+import { studentReviewStatusLabel } from "../utils/paymentReview";
 import { useAuth } from "../context/AuthContext";
 import api from "../services/api";
 
@@ -83,7 +84,7 @@ const StudentDashboardPage = () => {
   }, [payments]);
 
   return (
-    <PortalLayout title="Student Dashboard" navItems={studentNav}>
+    <PortalLayout title="Dashboard" navItems={studentNav}>
       {loading && <p className="page-message">Loading dashboard...</p>}
       {error && <p className="error">{error}</p>}
 
@@ -151,6 +152,7 @@ const StudentDashboardPage = () => {
                     <th>Payment ID</th>
                     <th>Fee</th>
                     <th>Status</th>
+                    <th>Review</th>
                     <th>Amount</th>
                     <th>Paid At</th>
                   </tr>
@@ -161,6 +163,7 @@ const StudentDashboardPage = () => {
                       <td>{row.payment_id}</td>
                       <td>{row.fee_name}</td>
                       <td><StatusBadge value={row.payment_status} /></td>
+                      <td><StatusBadge value={studentReviewStatusLabel(row)} /></td>
                       <td>PHP {Number(row.amount).toLocaleString()}</td>
                       <td>{row.paid_at ? new Date(row.paid_at).toLocaleString() : "-"}</td>
                     </tr>

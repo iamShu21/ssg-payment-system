@@ -104,9 +104,94 @@ const getAuditLogs = async (req, res) => {
   }
 };
 
+const getUnpaidStudentsPerFee = async (req, res) => {
+  try {
+    const { fee_id } = req.params;
+
+    const [rows] = await pool.query(
+      `
+      SELECT
+        sf.student_fee_id,
+        sf.assignment_status,
+        s.student_id,
+        s.student_number,
+        s.first_name,
+        s.middle_name,
+        s.last_name,
+        s.course,
+        s.year_level,
+        s.section,
+        f.fee_id,
+        f.fee_name,
+        f.amount
+      FROM student_fees sf
+      JOIN students s ON sf.student_id = s.student_id
+      JOIN fees f ON sf.fee_id = f.fee_id
+      WHERE sf.fee_id = ? AND sf.assignment_status <> 'paid'
+      ORDER BY s.student_number ASC
+      `,
+      [fee_id]
+    );
+
+    res.json(rows);
+  } catch (error) {
+    console.error("Get unpaid students per fee error:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+const getDailyCollectionReport = async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      `
+      SELECT
+        DATE(p.paid_at) AS payment_date,
+        SUM(p.amount) AS total_amount,
+        COUNT(p.payment_id) AS transaction_count
+      FROM payments p
+      WHERE p.payment_status = 'paid'
+      AND p.paid_at IS NOT NULL
+      GROUP BY DATE(p.paid_at)
+      ORDER BY payment_date DESC
+      LIMIT 30
+      `
+    );
+
+    res.json(rows);
+  } catch (error) {
+    console.error("Get daily collection report error:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+const getMonthlyCollectionReport = async (req, res) => {
+  try {
+    const [rows] = await pool.query(`
+      SELECT
+        DATE_FORMAT(p.paid_at, '%Y-%m') AS month,
+        SUM(p.amount) AS total_amount,
+        COUNT(p.payment_id) AS transaction_count
+      FROM payments p
+      WHERE p.payment_status = 'paid'
+        AND p.paid_at IS NOT NULL
+      GROUP BY DATE_FORMAT(p.paid_at, '%Y-%m')
+      ORDER BY month DESC
+      LIMIT 12
+    `);
+
+    res.json(rows);
+  } catch (error) {
+    console.error("Get monthly collection report error:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
 module.exports = {
   getAdminDashboardSummary,
   getReportsOverview,
   getPerFeeCollectionSummary,
   getAuditLogs,
+  getUnpaidStudentsPerFee,
+  getDailyCollectionReport,
+  getMonthlyCollectionReport,
 };

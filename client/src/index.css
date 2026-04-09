@@ -1,11 +1,122 @@
-body {
-  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-  margin: 0;
-  background: #f7f0f0;
-  color: #22333a;
-  line-height: 1.45;
-}
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-#root {
-  min-height: 100vh;
+/*
+  SSG Payment System — design tokens (RGB channels for Tailwind opacity).
+  Source palette: warm cream light mode, deep green dark mode.
+*/
+
+@layer base {
+  :root {
+    /* Typography stacks (custom fonts load via index.html; fallbacks always apply) */
+    --font-sans: "Montserrat", ui-sans-serif, system-ui, -apple-system, sans-serif;
+    --font-serif: "Merriweather", ui-serif, Georgia, "Times New Roman", serif;
+    --font-mono: "Source Code Pro", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+    --background: 248 245 240;
+    --foreground: 62 39 35;
+    --card: 248 245 240;
+    --card-foreground: 62 39 35;
+    --popover: 248 245 240;
+    --popover-foreground: 62 39 35;
+    --muted: 240 233 224;
+    --muted-foreground: 109 76 65;
+    --accent: 200 230 201;
+    --accent-foreground: 27 94 32;
+    --border: 224 214 201;
+    --input: 224 214 201;
+    --ring: 46 125 50;
+    --radius: 0.5rem;
+
+    --primary: 46 125 50;
+    --primary-foreground: 255 255 255;
+    --secondary: 232 245 233;
+    --secondary-foreground: 27 94 32;
+
+    --destructive: 198 40 40;
+    --destructive-foreground: 255 255 255;
+
+    --sidebar: 240 233 224;
+    --sidebar-foreground: 62 39 35;
+    --sidebar-primary: 46 125 50;
+    --sidebar-primary-foreground: 255 255 255;
+    --sidebar-accent: 200 230 201;
+    --sidebar-accent-foreground: 27 94 32;
+    --sidebar-border: 224 214 201;
+    --sidebar-ring: 46 125 50;
+
+    --chart-1: 76 175 80;
+    --chart-2: 56 142 60;
+    --chart-3: 46 125 50;
+    --chart-4: 27 94 32;
+    --chart-5: 10 31 12;
+    --chart-track: 226 218 210;
+    --chart-paid: 76 175 80;
+    --chart-pending: 184 142 60;
+  }
+
+  .dark {
+    --background: 28 42 31;
+    --foreground: 240 235 229;
+    --card: 45 58 46;
+    --card-foreground: 240 235 229;
+    --popover: 45 58 46;
+    --popover-foreground: 240 235 229;
+    --muted: 45 58 46;
+    --muted-foreground: 215 207 196;
+    --accent: 56 142 60;
+    --accent-foreground: 240 235 229;
+    --border: 62 74 61;
+    --input: 62 74 61;
+    --ring: 76 175 80;
+    --radius: 0.5rem;
+
+    --primary: 76 175 80;
+    --primary-foreground: 10 31 12;
+    --secondary: 62 74 61;
+    --secondary-foreground: 215 224 214;
+
+    --destructive: 198 40 40;
+    --destructive-foreground: 240 235 229;
+
+    --sidebar: 28 42 31;
+    --sidebar-foreground: 240 235 229;
+    --sidebar-primary: 76 175 80;
+    --sidebar-primary-foreground: 10 31 12;
+    --sidebar-accent: 56 142 60;
+    --sidebar-accent-foreground: 240 235 229;
+    --sidebar-border: 62 74 61;
+    --sidebar-ring: 76 175 80;
+
+    --chart-1: 129 199 132;
+    --chart-2: 102 187 106;
+    --chart-3: 76 175 80;
+    --chart-4: 67 160 71;
+    --chart-5: 56 142 60;
+    --chart-track: 55 68 56;
+    --chart-paid: 129 199 132;
+    --chart-pending: 212 176 120;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply min-h-screen bg-background text-foreground antialiased;
+    font-family: var(--font-sans);
+    line-height: 1.5;
+  }
+
+  #root {
+    min-height: 100vh;
+  }
+
+  code,
+  kbd,
+  pre,
+  samp {
+    font-family: var(--font-mono);
+  }
 }

@@ -33,6 +33,13 @@ const ReceiptDetailsCard = ({ receipt }) => {
           <strong>Payment Status:</strong> <StatusBadge value={receipt?.payment_status} />
         </div>
         <div>
+          <strong>Officer review:</strong>{" "}
+          <StatusBadge value={receipt?.officer_status || "unreviewed"} />
+        </div>
+        <div>
+          <strong>Approved By:</strong> {receipt?.approved_by || "-"}
+        </div>
+        <div>
           <strong>Paid At:</strong>{" "}
           {receipt?.paid_at ? new Date(receipt.paid_at).toLocaleString() : "-"}
         </div>

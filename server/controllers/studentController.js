@@ -1,6 +1,19 @@
 const pool = require("../db");
 const bcrypt = require("bcryptjs");
 
+const ALLOWED_COURSES = [
+  "Bachelor of Science in Architecture (BSArchi)",
+  "Bachelor of Science in Civil Engineering (BSCE)",
+  "Bachelor of Science in Computer Engineering (BSCoE)",
+  "Bachelor of Science in Computer Science (BSCS)",
+  "Bachelor of Science in Electrical Engineering (BSEE)",
+  "Bachelor of Science in Electronics Engineering (BSEcE)",
+  "Bachelor of Science in Information Technology (BSIT)",
+  "Bachelor of Library and Information Science (BLIS)",
+];
+
+const ALLOWED_YEAR_LEVELS = [1, 2, 3, 4, 5];
+
 const testStudent = async (req, res) => {
   console.log("[DEBUG] testStudent endpoint called");
   return res.json({ message: "student routes working" });
@@ -35,6 +48,14 @@ const createStudent = async (req, res) => {
       return res.status(400).json({ message: "Please fill in required fields" });
     }
 
+    if (!ALLOWED_COURSES.includes(course)) {
+      return res.status(400).json({ message: "Invalid course selected" });
+    }
+
+    if (!ALLOWED_YEAR_LEVELS.includes(Number(year_level))) {
+      return res.status(400).json({ message: "Invalid year level selected" });
+    }
+
     const [existingUsers] = await pool.query(
       "SELECT * FROM users WHERE username = ?",
       [username]
@@ -51,6 +72,16 @@ const createStudent = async (req, res) => {
 
     if (existingStudents.length > 0) {
       return res.status(400).json({ message: "Student number already exists" });
+    }
+
+    if (email) {
+      const [existingEmails] = await pool.query(
+        "SELECT * FROM users WHERE email = ?",
+        [email]
+      );
+      if (existingEmails.length > 0) {
+        return res.status(400).json({ message: "Email already exists" });
+      }
     }
 
     const password_hash = await bcrypt.hash(password, 10);
@@ -230,6 +261,37 @@ const updateStudent = async (req, res) => {
       }
     }
 
+    const ALLOWED_ENROLLMENT = ["enrolled", "inactive"];
+    const ALLOWED_USER_STATUS = ["active", "inactive"];
+
+    let enrollmentValue = null;
+    if (enrollment_status !== undefined && enrollment_status !== null && enrollment_status !== "") {
+      const e = String(enrollment_status).trim().toLowerCase();
+      if (!ALLOWED_ENROLLMENT.includes(e)) {
+        return res
+          .status(400)
+          .json({ message: "enrollment_status must be enrolled or inactive" });
+      }
+      enrollmentValue = e;
+    }
+
+    let userStatusValue = null;
+    if (user_status !== undefined && user_status !== null && user_status !== "") {
+      const us = String(user_status).trim().toLowerCase();
+      if (!ALLOWED_USER_STATUS.includes(us)) {
+        return res.status(400).json({ message: "user_status must be active or inactive" });
+      }
+      userStatusValue = us;
+    }
+
+    if (course !== undefined && course !== null && course !== "" && !ALLOWED_COURSES.includes(course)) {
+      return res.status(400).json({ message: "Invalid course selected" });
+    }
+
+    if (year_level !== undefined && year_level !== null && year_level !== "" && !ALLOWED_YEAR_LEVELS.includes(Number(year_level))) {
+      return res.status(400).json({ message: "Invalid year level selected" });
+    }
+
     await pool.query(
       `
       UPDATE students
@@ -254,7 +316,7 @@ const updateStudent = async (req, res) => {
         year_level || null,
         section || null,
         email || null,
-        enrollment_status || null,
+        enrollmentValue,
         student_id,
       ]
     );
@@ -267,7 +329,7 @@ const updateStudent = async (req, res) => {
         status = COALESCE(?, status)
       WHERE user_id = ?
       `,
-      [username || null, user_status || null, userId]
+      [username || null, userStatusValue, userId]
     );
 
     if (performed_by) {

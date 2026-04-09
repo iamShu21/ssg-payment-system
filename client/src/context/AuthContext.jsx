@@ -33,6 +33,40 @@ export const AuthProvider = ({ children }) => {
     setIsLoading(false);
   }, []);
 
+  useEffect(() => {
+    const run = async () => {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      let parsed;
+      try {
+        parsed = JSON.parse(raw);
+      } catch {
+        return;
+      }
+      const u = parsed.user;
+      const st = parsed.student;
+      if (!parsed.token || !u || u.role !== "student" || !st?.student_id) return;
+      if (st && Object.prototype.hasOwnProperty.call(st, "enrollment_status")) return;
+      try {
+        const { data } = await api.get("/students");
+        const match = data.find((row) => Number(row.user_id) === Number(u.user_id));
+        if (!match) return;
+        const next = {
+          ...parsed,
+          student: {
+            ...st,
+            enrollment_status: match.enrollment_status ?? null,
+          },
+        };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+        setStudent(next.student);
+      } catch {
+        /* ignore */
+      }
+    };
+    run();
+  }, []);
+
   const saveSession = (next) => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
     setToken(next.token || null);
@@ -71,6 +105,7 @@ export const AuthProvider = ({ children }) => {
           course: match.course,
           year_level: match.year_level,
           section: match.section,
+          enrollment_status: match.enrollment_status ?? null,
         };
       }
     }

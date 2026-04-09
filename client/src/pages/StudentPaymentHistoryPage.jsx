@@ -5,6 +5,10 @@ import StatusBadge from "../components/StatusBadge";
 import { useAuth } from "../context/AuthContext";
 import api from "../services/api";
 import { downloadReceiptPdf } from "../utils/receiptPdf";
+import {
+  studentReceiptAllowed,
+  studentReviewStatusLabel,
+} from "../utils/paymentReview";
 
 const studentNav = [
   { to: "/student/dashboard", label: "Dashboard" },
@@ -39,7 +43,9 @@ const StudentPaymentHistoryPage = () => {
   const handleDownloadReceipt = async (paymentId) => {
     try {
       setDownloadingId(paymentId);
-      const response = await api.get(`/payments/${paymentId}/receipt`);
+      const response = await api.get(
+        `/payments/${paymentId}/receipt?audience=student`
+      );
       downloadReceiptPdf(response.data);
     } catch (err) {
       alert(err.response?.data?.message || "Failed to download receipt.");
@@ -66,7 +72,8 @@ const StudentPaymentHistoryPage = () => {
                 <th>Fee</th>
                 <th>Amount</th>
                 <th>Payment Status</th>
-                <th>Assignment Status</th>
+                <th>Review</th>
+                <th>Assignment</th>
                 <th>Paid At</th>
                 <th>Reference</th>
                 <th>Receipt #</th>
@@ -74,42 +81,75 @@ const StudentPaymentHistoryPage = () => {
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => (
-                <tr key={row.payment_id}>
-                  <td>{row.payment_id}</td>
-                  <td>{row.fee_name}</td>
-                  <td>PHP {Number(row.amount).toLocaleString()}</td>
-                  <td><StatusBadge value={row.payment_status} /></td>
-                  <td><StatusBadge value={row.assignment_status} /></td>
-                  <td>{row.paid_at ? new Date(row.paid_at).toLocaleString() : "-"}</td>
-                  <td>{row.paymongo_reference || row.paymongo_checkout_id || "-"}</td>
-                  <td>{row.receipt_number || "-"}</td>
-                  <td>
-                    {row.payment_status === "paid" ? (
-                      <div className="button-col">
-                        <Link className="btn btn-secondary" to={`/student/receipt/${row.payment_id}`}>
-                          View Receipt
-                        </Link>
-                        <button
-                          className="btn"
-                          type="button"
-                          onClick={() => handleDownloadReceipt(row.payment_id)}
-                          disabled={downloadingId === row.payment_id}
-                        >
-                          {downloadingId === row.payment_id
-                            ? "Downloading..."
-                            : "Download PDF"}
-                        </button>
-                      </div>
-                    ) : (
-                      <span className="small-text">Unavailable</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
+              {rows.map((row) => {
+                const canReceipt = studentReceiptAllowed(
+                  row.payment_status,
+                  row.officer_status
+                );
+                const rejected =
+                  String(row.payment_status || "").toLowerCase() === "rejected";
+                return (
+                  <tr key={row.payment_id}>
+                    <td>{row.payment_id}</td>
+                    <td>{row.fee_name}</td>
+                    <td>PHP {Number(row.amount).toLocaleString()}</td>
+                    <td>
+                      <StatusBadge value={row.payment_status} />
+                    </td>
+                    <td>
+                      <StatusBadge value={studentReviewStatusLabel(row)} />
+                      {rejected && row.review_remarks && (
+                        <div className="small-text rejection-note">
+                          Reason: {row.review_remarks}
+                        </div>
+                      )}
+                    </td>
+                    <td>
+                      <StatusBadge value={row.assignment_status} />
+                    </td>
+                    <td>
+                      {row.paid_at
+                        ? new Date(row.paid_at).toLocaleString()
+                        : "-"}
+                    </td>
+                    <td>
+                      {row.paymongo_reference || row.paymongo_checkout_id || "-"}
+                    </td>
+                    <td>{row.receipt_number || "-"}</td>
+                    <td>
+                      {canReceipt ? (
+                        <div className="button-col">
+                          <Link
+                            className="btn btn-secondary"
+                            to={`/student/receipt/${row.payment_id}`}
+                          >
+                            View Receipt
+                          </Link>
+                          <button
+                            className="btn"
+                            type="button"
+                            onClick={() => handleDownloadReceipt(row.payment_id)}
+                            disabled={downloadingId === row.payment_id}
+                          >
+                            {downloadingId === row.payment_id
+                              ? "Downloading..."
+                              : "Download PDF"}
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="small-text">
+                          {rejected
+                            ? "Unavailable (rejected)"
+                            : "Unavailable until approved"}
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="small-text">
+                  <td colSpan={10} className="small-text">
                     No payment history yet.
                   </td>
                 </tr>

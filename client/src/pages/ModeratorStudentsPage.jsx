@@ -1,20 +1,27 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import PortalLayout from "../components/PortalLayout";
+import { formatYearLevel, formatCourseAbbrev } from "../utils/displayFormat";
+import { ALLOWED_COURSES } from "../utils/formValidation";
 import api from "../services/api";
 
 const adminNav = [
   { to: "/moderator/dashboard", label: "Dashboard" },
   { to: "/moderator/students", label: "Students" },
+  { to: "/moderator/officers", label: "Officers" },
   { to: "/moderator/fees", label: "Fees" },
   { to: "/moderator/assignments", label: "Assignments" },
   { to: "/moderator/reports", label: "Reports" },
   { to: "/moderator/audit-logs", label: "Audit Logs" },
 ];
 
+const YEAR_LEVELS = ["1", "2", "3", "4", "5"];
+
 const ModeratorStudentsPage = () => {
   const [rows, setRows] = useState([]);
   const [search, setSearch] = useState("");
+  const [filterCourse, setFilterCourse] = useState("");
+  const [filterYear, setFilterYear] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -33,13 +40,29 @@ const ModeratorStudentsPage = () => {
   }, []);
 
   const filtered = useMemo(() => {
-    const q = search.toLowerCase().trim();
-    if (!q) return rows;
-    return rows.filter((row) => {
-      const name = `${row.first_name} ${row.last_name}`.toLowerCase();
-      return name.includes(q) || String(row.student_number).toLowerCase().includes(q);
-    });
-  }, [rows, search]);
+    let result = rows;
+
+    // Apply search filter
+    if (search) {
+      const q = search.toLowerCase().trim();
+      result = result.filter((row) => {
+        const name = `${row.first_name} ${row.last_name}`.toLowerCase();
+        return name.includes(q) || String(row.student_number).toLowerCase().includes(q);
+      });
+    }
+
+    // Apply course filter
+    if (filterCourse) {
+      result = result.filter((row) => row.course === filterCourse);
+    }
+
+    // Apply year level filter
+    if (filterYear) {
+      result = result.filter((row) => String(row.year_level) === filterYear);
+    }
+
+    return result;
+  }, [rows, search, filterCourse, filterYear]);
 
   return (
     <PortalLayout title="Student Management" navItems={adminNav}>
@@ -51,6 +74,22 @@ const ModeratorStudentsPage = () => {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
+          <select value={filterCourse} onChange={(e) => setFilterCourse(e.target.value)}>
+            <option value="">All Courses</option>
+            {ALLOWED_COURSES.map((course) => (
+              <option key={course} value={course}>
+                {formatCourseAbbrev(course)}
+              </option>
+            ))}
+          </select>
+          <select value={filterYear} onChange={(e) => setFilterYear(e.target.value)}>
+            <option value="">All Years</option>
+            {YEAR_LEVELS.map((year) => (
+              <option key={year} value={year}>
+                {formatYearLevel(year)}
+              </option>
+            ))}
+          </select>
           <Link className="btn" to="/moderator/students/new">
             Add Student
           </Link>
@@ -65,7 +104,7 @@ const ModeratorStudentsPage = () => {
           <table>
             <thead>
               <tr>
-                <th>Student #</th>
+                <th>Student ID No.</th>
                 <th>Name</th>
                 <th>Course / Year</th>
                 <th>Section</th>
@@ -79,7 +118,7 @@ const ModeratorStudentsPage = () => {
                 <tr key={row.student_id}>
                   <td>{row.student_number}</td>
                   <td>{`${row.first_name} ${row.last_name}`}</td>
-                  <td>{`${row.course} / ${row.year_level}`}</td>
+                  <td>{`${formatCourseAbbrev(row.course)} / ${formatYearLevel(row.year_level)}`}</td>
                   <td>{row.section || "-"}</td>
                   <td>{row.enrollment_status || "-"}</td>
                   <td>{row.status || "-"}</td>
